@@ -67,4 +67,15 @@ CACHES = {
 }
 
 ```
-
+``` bash
+# 数据迁移文件 得cd到file项目目录
+python manage.py makemigrations
+```
+``` bash
+# 数据迁移
+python manage.py migrate
+```
+``` bash
+# 运行
+python .\manage.py runserver
+```
