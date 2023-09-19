@@ -17,13 +17,14 @@ from PIL import Image, ImageDraw, ImageFont
 import random
 from io import BytesIO 
 import string
-
+import uuid
 redis_conn = get_redis_connection("default")
 
 # Create your views here.
 def view_files(request):
     # 创建（新增）一个新的 File 实例
     new_file = File.objects.create(
+        file_id=str(uuid.uuid4()).replace('-', ''),
         user_id=123,            # 随机用户ID，例如，123
         file_type=1,            # 文件类型
         file_name='example.txt',# 文件名
@@ -164,3 +165,23 @@ def get_code(request,codeuuid):
     image_data = generate_captcha_image(codeuuid)
     # 返回带有验证码图片的响应
     return HttpResponse(image_data, content_type='image/png')
+
+from django.core.paginator import Paginator
+def get_files(request):
+    currentPage = int(request.POST.get("currentPage"))
+    pageSize = int(request.POST.get("pageSize"))
+    files = File.objects.all().order_by('-modifie_time')
+    paginator = Paginator(files, pageSize)
+    page = paginator.get_page(currentPage)
+    result = page.object_list  # 当前页的查询结果
+    totalCount = paginator.count  # 总记录数
+    list = [] 
+    for item in result:
+        list.append({
+        'fileId': item.file_id,
+        'fileName': item.file_name,
+        'status': item.status,
+        'fileType': item.file_type,
+        })
+    data={"total":totalCount,"list":list}
+    return Result.success(data)

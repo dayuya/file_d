@@ -19,12 +19,13 @@ from django.urls import path
 from myapp import views
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('view_files', views.view_files),
+    path('viewFiles', views.view_files),
     path('test', views.test),
     path('login', views.login),
     path('register', views.register),
     path('api/upload', views.upload_file, name='upload_file'),
     path('api/download/<str:filename>', views.download_file, name='download-file'),
     path('currentUser', views.currentUser, name='currentUser'),
-    path('get_code/<str:codeuuid>', views.get_code, name='get_code'),
+    path('getCode/<str:codeuuid>', views.get_code, name='get_code'),
+    path('getFiles', views.get_files, name='get_files'),
 ]

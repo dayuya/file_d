@@ -5,7 +5,7 @@ import uuid
 class File(models.Model):
     file_id = models.CharField(max_length=32,primary_key=True, default=str(uuid.uuid4()).replace('-', ''))
     user_id = models.BigIntegerField(null=False)
-    file_type = models.PositiveSmallIntegerField(null=True, default=None)
+    file_type = models.CharField(max_length=10,null=True, default=None)
     file_name = models.CharField(max_length=255, null=True, default=None)
     status = models.PositiveSmallIntegerField(null=True, default=None)
     file_url = models.CharField(max_length=255, null=True, default=None)
