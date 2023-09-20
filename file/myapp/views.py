@@ -18,6 +18,8 @@ import random
 from io import BytesIO 
 import string
 import uuid
+import time
+from myapp.models import Categories
 redis_conn = get_redis_connection("default")
 
 # Create your views here.
@@ -45,21 +47,31 @@ def login(request):
 
     username = request.POST.get("username")
     password = request.POST.get("password")
-    auth_obj = auth.authenticate(username=username, password=password)
+
+    # 根据用户名获取用户对象
+    try:
+        user = User.objects.get(username=username)
+    except User.DoesNotExist:
+        # 用户不存在，处理登录失败的情况
+        # 执行其他登录失败的操作
+        return HttpResponse('Invalid password')
+    # 验证密码是否匹配
+    if not user.check_password(password):
+        # 密码匹配，执行登录操作
+        # 将用户标记为已登录
+        return Result.fail(ErrorCode.ACCOUNT_PWD_NOT_EXIST.code,ErrorCode.ACCOUNT_PWD_NOT_EXIST.msg)
     user_data = {
-    'username': auth_obj.username,
-    'user_id': auth_obj.id,
-    'first_name': auth_obj.first_name,#用户的名字
-    'last_name': auth_obj.last_name,#用户的姓氏
+    'username': user.username,
+    'user_id': user.id,
+    'first_name': user.first_name,#用户的名字
+    'last_name': user.last_name,#用户的姓氏
     # 添加其他必要的关键信息
     }
-    if not auth_obj:
-        return Result.fail(ErrorCode.ACCOUNT_PWD_NOT_EXIST.code,ErrorCode.ACCOUNT_EXIST.msg)
     # 设置有效期，例如设定为 1 小时
     expiration_time = datetime.utcnow() + timedelta(hours=1)
     # 构建 payload 数据
     payload = {
-        'user_id':auth_obj.id,
+        'user_id':user.id,
         'exp': expiration_time
     }
     # 使用 secret key 生成 JWT token
@@ -91,6 +103,7 @@ def register(request):
 def upload_file(request):
     if request.method == 'POST' and request.FILES.get('file'):
         uploaded_file = request.FILES['file']
+        print(uploaded_file)
         # 确保 upload 文件夹存在
         upload_folder = os.path.join(settings.MEDIA_ROOT)
         os.makedirs(upload_folder, exist_ok=True)
@@ -170,18 +183,60 @@ from django.core.paginator import Paginator
 def get_files(request):
     currentPage = int(request.POST.get("currentPage"))
     pageSize = int(request.POST.get("pageSize"))
-    files = File.objects.all().order_by('-modifie_time')
+    queryInput = request.POST.get("queryInput")
+    queryStatus = request.POST.get("queryStatus")
+    files = File.objects.order_by('-modifie_time')
+    if queryStatus != "all":
+        files = files.filter(status__icontains=queryStatus)
+    if queryInput is not None:
+        files = files.filter(file_name__icontains=queryInput)
     paginator = Paginator(files, pageSize)
     page = paginator.get_page(currentPage)
     result = page.object_list  # 当前页的查询结果
     totalCount = paginator.count  # 总记录数
     list = [] 
+    status={0:"未发布",1:"审核中",2:"通过",3:"驳回"}
     for item in result:
         list.append({
+        'fileId': item.file_id,
+        'fileName': item.file_name,
+        'status': status[item.status],
+        'fileType': item.file_type,
+        })
+    data={"total":totalCount,"list":list}
+    return Result.success(data)
+
+def get_categories(request):
+    Categorie=Categories.objects.all().values('id','name')
+    return Result.success(list(Categorie))
+def getFilesByCategorieId(request):
+    categorieId = request.POST.get("id")
+    category = Categories.objects.get(id=categorieId)
+    categoryTypes=category.type
+    files = File.objects.filter(file_type__in=tuple(categoryTypes.split(","))).order_by('-modifie_time')
+    print(files.query)
+    data = [] 
+    for item in files:
+        data.append({
         'fileId': item.file_id,
         'fileName': item.file_name,
         'status': item.status,
         'fileType': item.file_type,
         })
-    data={"total":totalCount,"list":list}
     return Result.success(data)
+
+
+def editFileNameByid(request):
+    fileId = request.POST.get("id")
+    status={"未发布":0,"审核中":1,"通过":2,"驳回":3}
+    file = File.objects.filter(file_id=fileId).update(status=status['审核中'],modifie_time=int(time.time()*1000))
+    if file>0:
+        return Result.success("更新成功")
+    return Result.fail(500,"更新失败")
+def delete(request,fileId):
+    file_count, file_objects = File.objects.filter(file_id=fileId).delete()
+    if file_count>0:
+        return Result.success("删除成功")
+    return Result.fail(500,"找不到文件")
+
+
