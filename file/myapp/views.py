@@ -7,6 +7,7 @@ import os
 from django.conf import settings
 from django.http import FileResponse
 from django_redis import get_redis_connection
+
 import pickle
 import jwt
 from django.conf import settings
@@ -21,6 +22,7 @@ import uuid
 import time
 from myapp.models import Categories
 redis_conn = get_redis_connection("default")
+redis_img_code = get_redis_connection('img_code')  # 获取redis客户端
 
 # Create your views here.
 def view_files(request):
@@ -47,18 +49,18 @@ def login(request):
 
     username = request.POST.get("username")
     password = request.POST.get("password")
-
-    # 根据用户名获取用户对象
+    code = request.POST.get("code")
+    randomStr = request.POST.get("randomStr")
+    value = redis_img_code.get(str(randomStr))
+    if value:
+        value=value.decode()
+    if code is not value:
+        return Result.fail(ErrorCode.ACCOUNT_PWD_NOT_EXIST.code,"验证码错啦")
     try:
         user = User.objects.get(username=username)
     except User.DoesNotExist:
-        # 用户不存在，处理登录失败的情况
-        # 执行其他登录失败的操作
-        return HttpResponse('Invalid password')
-    # 验证密码是否匹配
+        return Result.fail(ErrorCode.ACCOUNT_PWD_NOT_EXIST.code,ErrorCode.ACCOUNT_PWD_NOT_EXIST.msg)
     if not user.check_password(password):
-        # 密码匹配，执行登录操作
-        # 将用户标记为已登录
         return Result.fail(ErrorCode.ACCOUNT_PWD_NOT_EXIST.code,ErrorCode.ACCOUNT_PWD_NOT_EXIST.msg)
     user_data = {
     'username': user.username,
@@ -165,8 +167,10 @@ def generate_captcha_image(codeuuid):
         draw.line((random.randint(0, 270), random.randint(0, 120), random.randint(0, 270),
                 random.randint(0, 120)),get_random_color(), width=3)
         i += 40
-    redis_client = get_redis_connection('img_code')  # 获取redis客户端
-    redis_client.setex(str(codeuuid), 60, ''.join(random_str))
+    print(str(codeuuid))
+    redis_img_code.setex(str(codeuuid), 600, ''.join(random_str))
+    value = redis_img_code.get(str(codeuuid)).decode()
+    print(value)
     # 6. 创建字节流，用于保存Image对象
     image_bytes = BytesIO()
     img.save(image_bytes, format='png')
