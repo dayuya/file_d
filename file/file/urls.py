@@ -24,7 +24,7 @@ urlpatterns = [
     path('api/login', views.login),
     path('register', views.register),
     path('api/upload', views.upload_file, name='upload_file'),
-    path('api/download/<str:filename>', views.download_file, name='download-file'),
+    path('api/download/<str:fileID>', views.download_file, name='download-file'),
     path('currentUser', views.currentUser, name='currentUser'),
     path('getCode/<str:codeuuid>', views.get_code, name='get_code'),
     path('getFiles', views.get_files, name='get_files'),
