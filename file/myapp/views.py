@@ -21,6 +21,8 @@ import string
 import uuid
 import time
 from myapp.models import Categories
+from django.db.models import Q
+
 redis_conn = get_redis_connection("default")
 redis_img_code = get_redis_connection('img_code')  # 获取redis客户端
 
@@ -54,7 +56,11 @@ def login(request):
     value = redis_img_code.get(str(randomStr))
     if value:
         value=value.decode()
-    if code is not value:
+        print(value+"="+code)
+    print(value)
+    if not value:
+        return Result.fail(ErrorCode.ACCOUNT_PWD_NOT_EXIST.code,"验证码异常")
+    if code.lower() != value.lower():
         return Result.fail(ErrorCode.ACCOUNT_PWD_NOT_EXIST.code,"验证码错啦")
     try:
         user = User.objects.get(username=username)
@@ -70,7 +76,7 @@ def login(request):
     # 添加其他必要的关键信息
     }
     # 设置有效期，例如设定为 1 小时
-    expiration_time = datetime.utcnow() + timedelta(hours=1)
+    expiration_time = datetime.utcnow() + timedelta(hours=24)
     # 构建 payload 数据
     payload = {
         'user_id':user.id,
@@ -103,27 +109,58 @@ def register(request):
     except Exception as e:
         return Result.fail(ErrorCode.REGISTRATION_FAILED.code, ErrorCode.REGISTRATION_FAILED.msg)
 def upload_file(request):
-    if request.method == 'POST' and request.FILES.get('file'):
-        uploaded_file = request.FILES['file']
-        print(uploaded_file)
+    if request.method == 'POST' and request.FILES.get('files'):
+        uploaded_file = request.FILES['files']
+        # print(uuid.uuid4())
+        token = request.META.get('HTTP_AUTHORIZATION')
+        if not checkToken(token):
+            return Result.fail(ErrorCode.NO_LOGIN.code,ErrorCode.NO_LOGIN.msg)
+        userJson = redis_conn.get("TOKEN_" + token)  # 根据 token 获取用户信息
+        if not userJson:
+            return Result.fail(ErrorCode.NO_LOGIN.code, ErrorCode.NO_LOGIN.msg)
+        aa=pickle.loads(userJson)
+        print(aa)#{'username': 'test', 'user_id': 3, 'first_name': '', 'last_name': ''}
+        file_name, file_extension = os.path.splitext(uploaded_file.name)
+        print(file_name)  # 输出: 冒泡排序
+        print(file_extension[1:])  # 输出: png
+        file_uuid=str(uuid.uuid4()).replace('-', '')
+        new_file = File.objects.create(
+            file_id=file_uuid,
+            user_id=aa['user_id'],            # 随机用户ID，例如，123
+            file_type=file_extension[1:],            # 文件类型后缀
+            file_name=file_name,# 文件名
+            status=0,               # 状态
+            file_url=file_uuid, # 文件URL 实际存储地址
+        )
+        
         # 确保 upload 文件夹存在
         upload_folder = os.path.join(settings.MEDIA_ROOT)
         os.makedirs(upload_folder, exist_ok=True)
         # 构造文件的保存路径
-        file_path = os.path.join(upload_folder, uploaded_file.name)
+        file_path = os.path.join(upload_folder, file_uuid+"."+file_extension[1:])
         # 保存文件到指定路径
         with open(file_path, 'wb+') as destination:
             for chunk in uploaded_file.chunks():
                 destination.write(chunk)
-        return JsonResponse({'message': '文件上传成功'})
-    return JsonResponse({'error': '请求方法错误或没有选择文件'}, status=400)
-def download_file(request, filename):
+        return Result.success("文件上传成功")
+    return Result.fail(400,'请求方法错误或没有选择文件')
+def download_file(request, fileID):
+    file=File.objects.get(file_id=fileID)
+    file_type=file.file_type
+    filename=file.file_id+"."+file_type
+    file_url=file.file_url
+    print(filename)
     # 确定文件的保存路径
-    file_path = os.path.join(settings.MEDIA_ROOT, filename)
+    file_path = os.path.join(settings.MEDIA_ROOT, file_url+'.'+file_type)
+    print(file_path)
     if os.path.exists(file_path):
+        import mimetypes
+        # 获取文件的MIME类型
+        content_type, _ = mimetypes.guess_type(file_path)
         # 打开文件并返回给客户端进行下载
         with open(file_path, 'rb') as file:
-            response = HttpResponse(file.read(), content_type='application/octet-stream')
+            response = HttpResponse(file.read(), content_type=content_type)
+            response['Access-Control-Expose-Headers'] = "Content-Disposition"
             response['Content-Disposition'] = f'attachment; filename="{filename}"'
             return response
     else:
@@ -189,11 +226,23 @@ def get_files(request):
     pageSize = int(request.POST.get("pageSize"))
     queryInput = request.POST.get("queryInput")
     queryStatus = request.POST.get("queryStatus")
+    categorieId = request.POST.get("queryCategorie")
     files = File.objects.order_by('-modifie_time')
+    # 使用 Q 对象创建复杂的查询条件
+    query = Q()
+
     if queryStatus != "all":
-        files = files.filter(status__icontains=queryStatus)
+        query &= Q(status=queryStatus)
     if queryInput is not None:
-        files = files.filter(file_name__icontains=queryInput)
+        query &= Q(file_name__icontains=queryInput)
+    if categorieId != "all":
+        category = Categories.objects.get(id=categorieId)
+        categoryTypes = tuple(category.type.split(","))
+        query &= Q(file_type__in=categoryTypes)
+
+    # 应用查询条件
+    files = files.filter(query)
+
     paginator = Paginator(files, pageSize)
     page = paginator.get_page(currentPage)
     result = page.object_list  # 当前页的查询结果
@@ -216,8 +265,8 @@ def get_categories(request):
 def getFilesByCategorieId(request):
     categorieId = request.POST.get("id")
     category = Categories.objects.get(id=categorieId)
-    categoryTypes=category.type
-    files = File.objects.filter(file_type__in=tuple(categoryTypes.split(","))).order_by('-modifie_time')
+    categoryTypes=tuple(category.type.split(","))
+    files = File.objects.filter(file_type__in=categoryTypes).order_by('-modifie_time')
     print(files.query)
     data = [] 
     for item in files:
