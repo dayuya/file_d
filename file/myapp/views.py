@@ -147,9 +147,9 @@ def upload_file(request):
 def download_file(request, fileID):
     file=File.objects.get(file_id=fileID)
     file_type=file.file_type
-    filename=file.file_id+"."+file_type
-    file_url=file.file_url
+    filename=str(file.file_name+"."+file_type)
     print(filename)
+    file_url=file.file_url
     # 确定文件的保存路径
     file_path = os.path.join(settings.MEDIA_ROOT, file_url+'.'+file_type)
     print(file_path)
@@ -161,7 +161,7 @@ def download_file(request, fileID):
         with open(file_path, 'rb') as file:
             response = HttpResponse(file.read(), content_type=content_type)
             response['Access-Control-Expose-Headers'] = "Content-Disposition"
-            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            response['Content-Disposition'] = f'attachment; filename="{filename.encode("utf-8").decode("latin-1")}"'
             return response
     else:
         return Result.fail(404,'文件不存在')
@@ -191,19 +191,19 @@ def generate_captcha_image(codeuuid):
     random_str = random.sample(string.ascii_uppercase + string.ascii_lowercase + string.digits, 5)
 
     # 3. 创建Image对象并为其配置ImageDraw对象
-    img = Image.new('RGB', (270, 120), color=get_random_color())
+    img = Image.new('RGB', (390, 120), color=get_random_color())
     draw = ImageDraw.Draw(img)
 
     # 4. 创建ImageFont对象
-    kumo_font = ImageFont.truetype('D:/project/pyProject/fileshare/file/myapp/font/KumoFont.ttf', size=40)  # 路径结合自己存放的路径
+    kumo_font = ImageFont.truetype('D:/project/pyProject/fileshare/file/myapp/font/KumoFont.ttf', size=80)  # 路径结合自己存放的路径
 
     # 5. 在img中绘制随机字符串和线条
-    i, j = 25, 20
+    i, j = 75, 20
     for c in random_str:
         draw.text((i, j), c, get_random_color(), font=kumo_font)
-        draw.line((random.randint(0, 270), random.randint(0, 120), random.randint(0, 270),
-                random.randint(0, 120)),get_random_color(), width=3)
-        i += 40
+        draw.line((random.randint(0, 390), random.randint(0, 180), random.randint(0, 390),
+                random.randint(0, 180)),get_random_color(), width=3)
+        i += 50
     print(str(codeuuid))
     redis_img_code.setex(str(codeuuid), 600, ''.join(random_str))
     value = redis_img_code.get(str(codeuuid)).decode()

@@ -1,0 +1,5 @@
+ .idea
+/env
+file/myapp/__pycache__/
+file/myapp/migrations/__pycache__/
+file/myapp/migrations/

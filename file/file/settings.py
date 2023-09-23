@@ -54,6 +54,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'myapp.middlewares.MD1'
 ]
 
 ROOT_URLCONF = 'file.urls'
@@ -145,6 +146,7 @@ CORS_ORIGIN_WHITELIST = [
     "http://localhost:8080",
     "http://localhost:8080",
     "http://127.0.0.1:8080",
+    "http://127.0.0.1:6666",
 ]
 
 import os
