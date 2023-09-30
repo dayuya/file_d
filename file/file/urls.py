@@ -17,12 +17,14 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 from myapp import views
+from myapp import adminviews
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('viewFiles', views.view_files),
     path('test', views.test),
+    path('api/updatepwd', views.updatepwd, name='updatepwd'),
     path('api/login', views.login),
-    path('register', views.register),
+    path('api/register', views.register),
     path('api/upload', views.upload_file, name='upload_file'),
     path('api/download/<str:fileID>', views.download_file, name='download-file'),
     path('currentUser', views.currentUser, name='currentUser'),
@@ -32,4 +34,18 @@ urlpatterns = [
     path('getFilesByCategorieId', views.getFilesByCategorieId, name='getFilesByCategorieId'),
     path('editFileNameByid', views.editFileNameByid, name='editFileNameByid'),
     path('delete/<str:fileId>', views.delete, name='delete'),
+
+    path('getStoarge', views.getStoarge, name='getStoarge'),
+
+    
+
+    path('auth/getFiles', adminviews.get_files, name='get_files'),
+    path('auth/editFileNameByid', adminviews.editFileNameByid, name='editFileNameByid'),
+    path('auth/statusPassByid', adminviews.statusPassByid, name='statusPassByid'),
+    path('auth/statusNoPassByid', adminviews.statusNoPassByid, name='statusNoPassByid'),
+    path('auth/getFilesRecord', adminviews.getFilesRecord, name='getFilesRecord'),
+
+
+    path('getFilesShare', views.getFilesShare, name='getFilesShare'),
+
 ]

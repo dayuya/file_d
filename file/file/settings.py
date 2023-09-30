@@ -25,7 +25,7 @@ SECRET_KEY = 'django-insecure-=x8=xxh(5sw8!a!l^7m80y!lp7g8ag=%*2^n5g8s@#a6oa+)g+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1','192.168.193.88','dayu.yudayu.eu.org','67.yudayu.eu.org']
 # 取消URL一定以斜杠结尾
 APPEND_SLASH=False
 
@@ -147,7 +147,36 @@ CORS_ORIGIN_WHITELIST = [
     "http://localhost:8080",
     "http://127.0.0.1:8080",
     "http://127.0.0.1:6666",
+    "http://localhost:9999",
+    "http://192.168.193.88",
+    "http://dayu.yudayu.eu.org/",
+    "https://dayu.yudayu.eu.org/",
 ]
+#跨域增加忽略
+CORS_ORIGIN_WHITELIST = ()
+ # 对应的发送的请求的跨域
+CORS_ALLOW_METHODS = (
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+    'VIEW',
+)
+ 
+CORS_ALLOW_HEADERS = (
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+)
+
 
 import os
 # MEDIA_URL = '/media/'
@@ -195,3 +224,4 @@ SESSION_CACHE_ALIAS = "session"
 
 
 
+CSRF_TRUSTED_ORIGINS = ['https://67.yudayu.eu.org']

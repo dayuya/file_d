@@ -1,8 +1,7 @@
 from django.shortcuts import render,HttpResponse
 from django.contrib import auth
 from django.contrib.auth.models import User
-from myapp.models import File,Categories,Storage,FileRecord
-from django.db.models import F
+from myapp.models import File,Storage,Categories,FileRecord
 from django.http import HttpResponse, JsonResponse
 import os
 from django.conf import settings
@@ -21,12 +20,11 @@ from io import BytesIO
 import string
 import uuid
 import time
-
-from django.db.models import Q
+from django.db.models import Q,F
 
 redis_conn = get_redis_connection("default")
 redis_img_code = get_redis_connection('img_code')  # 获取redis客户端
-
+ 
 # Create your views here.
 def view_files(request):
     # 创建（新增）一个新的 File 实例
@@ -44,47 +42,10 @@ def view_files(request):
     return HttpResponse("1")
 
 def test(request):
-    FileRecord.objects.create(
-        # file_id=str(uuid.uuid4()).replace('-', ''),
-        file_id=123,             
-        user_id=1,             
-        download_status='1',#  
-        download_ip=1,               #  
-        # download_time='example.com', #  
-    )
     if not request.user.is_authenticated:
         return Result.fail(ErrorCode.NO_LOGIN.code,ErrorCode.NO_LOGIN.msg)
     return Result.success("666")
-def updatepwd(request):
-    aa=get_userinfo(request)
-    if not aa:
-        return Result.fail(ErrorCode.NO_LOGIN.code, ErrorCode.NO_LOGIN.msg)
-    username = request.POST.get("username")
-    password = request.POST.get("password")
-    code = request.POST.get("code")
-    randomStr = request.POST.get("randomStr")
-    value = redis_img_code.get(str(randomStr))
-    if aa['username'] !=username:
-        return Result.fail(ErrorCode.NO_PERMISSION.code, ErrorCode.NO_PERMISSION.msg)
-    if value:
-        value=value.decode()
-        print(value+"="+code)
-    print(value)
-    if not value:
-        return Result.fail(ErrorCode.ACCOUNT_PWD_NOT_EXIST.code,"验证码异常")
-    if code.lower() != value.lower():
-        return Result.fail(ErrorCode.ACCOUNT_PWD_NOT_EXIST.code,"验证码错啦")
-    # 使用 username 属性进行用户查询
-    try:
-        user_exists = User.objects.filter(username=username).exists()
-        if user_exists:
-            user = User.objects.get(username=username)  # 根据用户名获取用户对象
-            user.set_password(password)  # 设置新密码
-            user.save()  # 保存修改后的用户对象
-            return Result.success("修改成功")
-        return Result.fail(ErrorCode.REGISTRATION_FAILED.code, "修改失败")
-    except Exception as e:
-        return Result.fail(ErrorCode.REGISTRATION_FAILED.code, "修改失败")
+
 def login(request):
 
     username = request.POST.get("username")
@@ -111,7 +72,7 @@ def login(request):
     'user_id': user.id,
     'first_name': user.first_name,#用户的名字
     'last_name': user.last_name,#用户的姓氏
-    'is_admin': user.is_staff,#用户的姓氏
+    'is_admin': user.is_staff,#用户的权限
     # 添加其他必要的关键信息
     }
     # 设置有效期，例如设定为 1 小时
@@ -127,35 +88,17 @@ def login(request):
     return Result.success(token)
 def currentUser(request):
     aa=get_userinfo(request)
-    if not aa:
-        return Result.fail(403,aa)
     return Result.success(aa)
 
 def register(request):
     username = request.POST.get("username")
     password = request.POST.get("password")
-    code = request.POST.get("code")
-    randomStr = request.POST.get("randomStr")
-    value = redis_img_code.get(str(randomStr))
-    if value:
-        value=value.decode()
-        print(value+"="+code)
-    print(value)
-    if not value:
-        return Result.fail(ErrorCode.ACCOUNT_PWD_NOT_EXIST.code,"验证码异常")
-    if code.lower() != value.lower():
-        return Result.fail(ErrorCode.ACCOUNT_PWD_NOT_EXIST.code,"验证码错啦")
     # 使用 username 属性进行用户查询
     try:
         user_exists = User.objects.filter(username=username).exists()
         if user_exists:
             return Result.fail(ErrorCode.REGISTRATION_FAILED.code,"用户存在")
-        user=User.objects.create_user(username=username, password=password)
-        Storage.objects.create(
-            user_id=user.id,
-            allocated_size=1024*1024*1024,           
-            used_size=0,          
-        )        
+        User.objects.create_user(username=username, password=password)
         return Result.success(True)
     except Exception as e:
         return Result.fail(ErrorCode.REGISTRATION_FAILED.code, ErrorCode.REGISTRATION_FAILED.msg)
@@ -163,15 +106,14 @@ def upload_file(request):
 
     if request.method == 'POST' and request.FILES.get('files'):
         uploaded_file = request.FILES['files']
-        print(uploaded_file.size)
-        # print(uuid.uuid4()) 
+        # print(uuid.uuid4())
         aa=get_userinfo(request)
         if not aa:
             return Result.fail(ErrorCode.NO_LOGIN.code, ErrorCode.NO_LOGIN.msg)
         print(aa)#{'username': 'test', 'user_id': 3, 'first_name': '', 'last_name': ''}
         file_name, file_extension = os.path.splitext(uploaded_file.name)
         print(file_name)  # 输出: 冒泡排序
-        print(file_extension[1:])  # 输出: png  
+        print(file_extension[1:])  # 输出: png
         file_uuid=str(uuid.uuid4()).replace('-', '')
         new_file = File.objects.create(
             file_id=file_uuid,
@@ -192,8 +134,7 @@ def upload_file(request):
         with open(file_path, 'wb+') as destination:
             for chunk in uploaded_file.chunks():
                 destination.write(chunk)
-        
-        storage =Storage.objects.filter(user_id=aa['user_id']).update(used_size=F('used_size')+uploaded_file.size)
+        storage=Storage.objects.filter(user_id=aa['user_id']).update(used_size=F('used_size')+uploaded_file.size)
         if storage>0:
             pass
         return Result.success("文件上传成功")
@@ -201,22 +142,21 @@ def upload_file(request):
 def download_file(request, fileID):
     aa=get_userinfo(request)
     user_id=aa['user_id']#{'username': 'test', 'user_id': 3, 'first_name': '', 'last_name': '', 'is_admin': False}
-    try:
-         user=User.objects.get(id=user_id)
-    except User.DoesNotExist:
+    user=User.objects.get(id=user_id)
+    if user==None:
         FileRecord.objects.create(
             file_id=fileID,             
             user_id=user_id,             
-            download_status='1',#  
+            download_status='0',#  
             download_ip=1,               #  
         )
         return Result.fail(403,'无权限')
     file=File.objects.get(file_id=fileID)
-    if user_id!=user_id and not user.is_staff and file.status==2:
+    if user_id!=user_id and not user.is_staff and file.status==2:#审核通过
         FileRecord.objects.create(
             file_id=fileID,             
             user_id=user_id,             
-            download_status='1',#  
+            download_status='0',#  
             download_ip=1,               #  
         )
         return Result.fail(403,'无权限')
@@ -309,14 +249,15 @@ def get_code(request,codeuuid):
 from django.core.paginator import Paginator
 def get_files(request):
     aa=get_userinfo(request)
-    if not aa:
-        return Result.fail(ErrorCode.NO_LOGIN.code, ErrorCode.NO_LOGIN.msg)
+    print(aa['is_admin'])     
+    if not aa['is_admin']:
+        return Result.fail(403,"权限不足")
     currentPage = request.POST.get("currentPage")
     pageSize = request.POST.get("pageSize")
     queryInput = request.POST.get("queryInput")
     queryStatus = request.POST.get("queryStatus")
     categorieId = request.POST.get("queryCategorie")
-    files = File.objects.filter(user_id=aa['user_id']).order_by('-modifie_time')
+    files = File.objects.order_by('-modifie_time')
     
     # 使用 Q 对象创建复杂的查询条件
     query = Q()
@@ -340,14 +281,28 @@ def get_files(request):
     list = [] 
     status={0:"未发布",1:"审核中",2:"通过",3:"驳回"}
     for item in result:
+        print(item)
+        try:
+             user=User.objects.get(id=item.user_id)
+        except User.DoesNotExist:
+            list.append({
+            'fileId': item.file_id,
+            'fileName': item.file_name,
+            'status': status[item.status],
+            'fileType': item.file_type,
+            'modifieTime':item.modifie_time,
+            'username':None,
+            'user_id':None,
+            })
+            continue
         list.append({
         'fileId': item.file_id,
         'fileName': item.file_name,
         'status': status[item.status],
         'fileType': item.file_type,
         'modifieTime':item.modifie_time,
-        'username':aa['username'],
-        'user_id':aa['user_id'],
+        'username':user.username,
+        'user_id':user.id,
         })
     data={"total":totalCount,"list":list}
     return Result.success(data)
@@ -379,12 +334,31 @@ def editFileNameByid(request):
     if file>0:
         return Result.success("更新成功")
     return Result.fail(500,"更新失败")
+
+def statusPassByid(request):
+    fileId = request.POST.get("id")
+    status={"未发布":0,"审核中":1,"通过":2,"驳回":3}
+    file = File.objects.filter(file_id=fileId).update(status=status['通过'],modifie_time=int(time.time()*1000))
+    if file>0:
+        return Result.success("更新成功")
+    return Result.fail(500,"更新失败")
+
+def statusNoPassByid(request):
+    fileId = request.POST.get("id")
+    status={"未发布":0,"审核中":1,"通过":2,"驳回":3}
+    file = File.objects.filter(file_id=fileId).update(status=status['驳回'],modifie_time=int(time.time()*1000))
+    if file>0:
+        return Result.success("更新成功")
+    return Result.fail(500,"更新失败")
 def delete(request,fileId):
     aa=get_userinfo(request)
+    if not aa['is_admin']:
+        return Result.fail(403,"权限不足")
     if not aa:
         return Result.fail(ErrorCode.NO_LOGIN.code, ErrorCode.NO_LOGIN.msg)
     file=File.objects.get(file_id=fileId)
     filesize=file.file_size
+    filesize=file.user_id
     file_count, file_objects = file.delete()
     if file_count>0:
         storage =Storage.objects.filter(user_id=file.user_id).update(used_size=F('used_size')-filesize)
@@ -396,82 +370,69 @@ def delete(request,fileId):
 
 def get_userinfo(request):
     token = request.META.get('HTTP_AUTHORIZATION')
-    if checkToken(token) is None:
-        return False
+    if not checkToken(token):
+        return Result.fail(ErrorCode.NO_LOGIN.code,ErrorCode.NO_LOGIN.msg)
     userJson = redis_conn.get("TOKEN_" + token)  # 根据 token 获取用户信息
     if not userJson:
-        return False
-    aa=pickle.loads(userJson) 
+        return Result.fail(ErrorCode.NO_LOGIN.code, ErrorCode.NO_LOGIN.msg)
+    aa=pickle.loads(userJson)
     return aa
 
-
-def getStoarge(request):
+def getFilesRecord(request):
     aa=get_userinfo(request)
     if not aa:
         return Result.fail(ErrorCode.NO_LOGIN.code, ErrorCode.NO_LOGIN.msg)
-    try:
-        storage = Storage.objects.get(user_id=aa['user_id'])
-    except Storage.DoesNotExist:
-        return Result.fail(0,"存储异常")
-    data={}
-    data['allocated_size']=storage.allocated_size
-    data['used_size']=storage.used_size
-    return Result.success(data)
-
-
-def getFilesShare(request):
-    aa=get_userinfo(request)
-    if not aa:
-        return Result.fail(ErrorCode.NO_LOGIN.code, ErrorCode.NO_LOGIN.msg)
+    if not aa['is_admin']:
+        return Result.fail(403,"权限不足")
     currentPage = request.POST.get("currentPage")
     pageSize = request.POST.get("pageSize")
     queryInput = request.POST.get("queryInput")
     categorieId = request.POST.get("queryCategorie")
-    files = File.objects.order_by('-modifie_time')
-    
-    # 使用 Q 对象创建复杂的查询条件
-    query = Q()
-    status={"未发布":0,"审核中":1,"通过":2,"驳回":3}
-    query &= Q(status=status["通过"])
-    if queryInput is not None and queryInput!="null":
-        query &= Q(file_name__icontains=queryInput)
-    if categorieId != "all":
-        category = Categories.objects.get(id=categorieId)
-        categoryTypes = tuple(category.type.split(","))
-        query &= Q(file_type__in=categoryTypes)
-
-    # 应用查询条件
-    files = files.filter(query)
-    print(files.query)
-    paginator = Paginator(files, pageSize)
+    fileRecord = FileRecord.objects.order_by('-download_time')
+    paginator = Paginator(fileRecord, pageSize)
     page = paginator.get_page(currentPage)
     result = page.object_list  # 当前页的查询结果
     totalCount = paginator.count  # 总记录数
     list = [] 
-    status={0:"未发布",1:"审核中",2:"通过",3:"驳回"}
+    status={1:"下载成功",0:"下载失败"}
     for item in result:
+        print(item)
         try:
-             user=User.objects.get(id=item.user_id)
-        except User.DoesNotExist:
+            user=User.objects.get(id=item.user_id)
+            file=File.objects.get(file_id=item.file_id)
+        except File.DoesNotExist:
             list.append({
-            'fileId': item.file_id,
-            'fileName': item.file_name,
-            'status': status[item.status],
-            'fileType': item.file_type,
-            'modifieTime':item.modifie_time,
+            'fileId': None,
+            'fileName': None,
+            'status': status[int(item.download_status)],
+            'fileType': None,
+            'modifieTime':item.download_time,
+            'ip':item.download_ip,
+            'username':user.username,
+            'user_id':user.id,
+            })
+            continue
+        except User.DoesNotExist and File.DoesNotExist:
+            list.append({
+            'fileId': None,
+            'fileName': None,
+            'status': status[int(item.download_status)],
+            'fileType': None,
+            'modifieTime':item.download_time,
+            'ip':item.download_ip,
             'username':None,
             'user_id':None,
             })
             continue
         list.append({
-        'fileId': item.file_id,
-        'fileName': item.file_name,
-        'status': status[item.status],
-        'fileType': item.file_type,
-        'modifieTime':item.modifie_time,
+        'fileId': file.file_id,
+        'fileName': file.file_name,
+        'status': status[int(item.download_status)],
+        'fileType': file.file_type,
+        'modifieTime':item.download_time,
+        'ip':item.download_ip,
         'username':user.username,
         'user_id':user.id,
         })
     data={"total":totalCount,"list":list}
     return Result.success(data)
-

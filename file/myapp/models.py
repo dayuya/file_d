@@ -6,6 +6,7 @@ class File(models.Model):
     file_id = models.CharField(max_length=32,primary_key=True, default=str(uuid.uuid4()).replace('-', ''))
     user_id = models.BigIntegerField(null=False)
     file_type = models.CharField(max_length=10,null=True, default=None)
+    file_size = models.BigIntegerField(null=True, default=0)
     file_name = models.CharField(max_length=255, null=True, default=None)
     status = models.PositiveSmallIntegerField(null=True, default=None)
     file_url = models.CharField(max_length=255, null=True, default=None)
@@ -56,3 +57,12 @@ class User(models.Model):
 
     class Meta:
         db_table = 'user'
+class FileRecord(models.Model):
+    id = models.BigAutoField(primary_key=True)
+    file_id = file_id = models.CharField(max_length=32)
+    user_id = models.BigIntegerField(null=False)
+    download_status = models.CharField(max_length=2)
+    download_ip = models.CharField(max_length=64)
+    download_time =models.BigIntegerField(default=int(time.time()*1000))
+    class Meta:
+        db_table = 'file_fecord'
