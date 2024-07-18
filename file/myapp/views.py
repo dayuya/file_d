@@ -86,7 +86,6 @@ def updatepwd(request):
     except Exception as e:
         return Result.fail(ErrorCode.REGISTRATION_FAILED.code, "修改失败")
 def login(request):
-
     username = request.POST.get("username")
     password = request.POST.get("password")
     code = request.POST.get("code")
@@ -114,7 +113,7 @@ def login(request):
     'is_admin': user.is_staff,#用户的姓氏
     # 添加其他必要的关键信息
     }
-    # 设置有效期，例如设定为 1 小时
+    # 设置有效期，例如设定为 24 小时
     expiration_time = datetime.utcnow() + timedelta(hours=24)
     # 构建 payload 数据
     payload = {
@@ -160,29 +159,23 @@ def register(request):
     except Exception as e:
         return Result.fail(ErrorCode.REGISTRATION_FAILED.code, ErrorCode.REGISTRATION_FAILED.msg)
 def upload_file(request):
-
     if request.method == 'POST' and request.FILES.get('files'):
         uploaded_file = request.FILES['files']
         print(uploaded_file.size)
-        # print(uuid.uuid4()) 
         aa=get_userinfo(request)
         if not aa:
             return Result.fail(ErrorCode.NO_LOGIN.code, ErrorCode.NO_LOGIN.msg)
-        print(aa)#{'username': 'test', 'user_id': 3, 'first_name': '', 'last_name': ''}
         file_name, file_extension = os.path.splitext(uploaded_file.name)
-        print(file_name)  # 输出: 冒泡排序
-        print(file_extension[1:])  # 输出: png  
         file_uuid=str(uuid.uuid4()).replace('-', '')
         new_file = File.objects.create(
             file_id=file_uuid,
-            user_id=aa['user_id'],            # 随机用户ID，例如，123
-            file_type=file_extension[1:],            # 文件类型后缀
-            file_size=uploaded_file.size,            # 文件类型后缀
-            file_name=file_name,# 文件名
-            status=0,               # 状态
-            file_url=file_uuid, # 文件URL 实际存储地址
+            user_id=aa['user_id'],          
+            file_type=file_extension[1:],           
+            file_size=uploaded_file.size,           
+            file_name=file_name,
+            status=0,              
+            file_url=file_uuid, 
         )
-        
         # 确保 upload 文件夹存在
         upload_folder = os.path.join(settings.MEDIA_ROOT)
         os.makedirs(upload_folder, exist_ok=True)
@@ -192,7 +185,6 @@ def upload_file(request):
         with open(file_path, 'wb+') as destination:
             for chunk in uploaded_file.chunks():
                 destination.write(chunk)
-        
         storage =Storage.objects.filter(user_id=aa['user_id']).update(used_size=F('used_size')+uploaded_file.size)
         if storage>0:
             pass
@@ -200,15 +192,15 @@ def upload_file(request):
     return Result.fail(400,'请求方法错误或没有选择文件')
 def download_file(request, fileID):
     aa=get_userinfo(request)
-    user_id=aa['user_id']#{'username': 'test', 'user_id': 3, 'first_name': '', 'last_name': '', 'is_admin': False}
+    user_id=aa['user_id'] 
     try:
          user=User.objects.get(id=user_id)
     except User.DoesNotExist:
         FileRecord.objects.create(
             file_id=fileID,             
             user_id=user_id,             
-            download_status='1',#  
-            download_ip=1,               #  
+            download_status='1', 
+            download_ip=1,                
         )
         return Result.fail(403,'无权限')
     file=File.objects.get(file_id=fileID)
@@ -216,17 +208,15 @@ def download_file(request, fileID):
         FileRecord.objects.create(
             file_id=fileID,             
             user_id=user_id,             
-            download_status='1',#  
-            download_ip=1,               #  
+            download_status='1',  
+            download_ip=1,                 
         )
         return Result.fail(403,'无权限')
     file_type=file.file_type
     filename=str(file.file_name+"."+file_type)
-    print(filename)
     file_url=file.file_url
     # 确定文件的保存路径
     file_path = os.path.join(settings.MEDIA_ROOT, file_url+'.'+file_type)
-    print(file_path)
     if os.path.exists(file_path):
         import mimetypes
         # 获取文件的MIME类型
@@ -239,16 +229,16 @@ def download_file(request, fileID):
             FileRecord.objects.create(
                 file_id=fileID,             
                 user_id=user_id,             
-                download_status='1',#  
-                download_ip=1,               #  
+                download_status='1', 
+                download_ip=1,                 
             )
             return response
     else:
         FileRecord.objects.create(
             file_id=fileID,             
             user_id=user_id,             
-            download_status='0',#  
-            download_ip=1,               #  
+            download_status='0',
+            download_ip=1,               
         )
         return Result.fail(404,'文件不存在')
     
