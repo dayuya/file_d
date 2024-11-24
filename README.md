@@ -76,6 +76,6 @@ python manage.py makemigrations
 python manage.py migrate
 ```
 ``` bash
-# 运行
+# 运行前先激活环境
 python .\manage.py runserver
 ```
